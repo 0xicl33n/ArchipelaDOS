@@ -57,23 +57,32 @@ class TablePlotter:
         total_found = sum(status.found_checks for status in full_statuses.values())
         overall_percentage = (total_found / total_checks * 100) if total_checks > 0 else 0
 
-        # Add summary rows to table
-        for col in table.keys():
-            table[col].append("")  # Empty row separator
-        
-        table["Slot"].append("Total found:")
-        table["Total"].append("")
-        table["Found"].append(str(total_found))
-        for col in list(table.keys())[3:]:  # Fill remaining columns with empty strings
-            table[col].append("")
-        
-        table["Slot"].append("Overall completion:")
-        table["Total"].append("")
-        table["Found"].append(f"{overall_percentage:.1f}%")
-        for col in list(table.keys())[3:]:  # Fill remaining columns with empty strings
-            table[col].append("")
+        # Build table manually to add footer
+        num_rows = len(next(iter(table.values())))
+        column_widths = [max(len(entry) for entry in [header] + column) for header, column in table.items()]
+        just_funcs = [str.rjust for _ in table.keys()]
+        just_funcs[0] = str.ljust  # Always left-justify the first column.
 
-        await send_table(ctx, table, right_just=True)
+        lines: list[str] = []
+        lines.append(" | ".join(header.ljust(width) for header, width in zip(table.keys(), column_widths)) + "\n")
+        lines.append("-+-".join("-" * width for width in column_widths) + "\n")
+
+        for row_idx in range(num_rows):
+            lines.append(
+                " | ".join(
+                    just_func(column[row_idx], width)
+                    for column, width, just_func in zip(table.values(), column_widths, just_funcs)
+                )
+                + "\n"
+            )
+
+        # Add footer
+        lines.append("-+-".join("-" * width for width in column_widths) + "\n")
+        lines.append(f"Total found: {total_found} / {total_checks}\n")
+        lines.append(f"Overall completion: {overall_percentage:.1f}%\n")
+
+        message = "```" + "".join(lines) + "```"
+        await ctx.send(message)
 
     @staticmethod
     async def send_items(ctx: BotContext, item_counts: dict[SlotInfo, SlotItemCounts]) -> None:
