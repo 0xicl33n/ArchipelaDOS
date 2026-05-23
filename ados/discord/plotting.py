@@ -52,6 +52,27 @@ class TablePlotter:
             table.pop("Self Freed")
             table.pop("   ")
 
+        # Calculate totals
+        total_checks = sum(status.total_checks for status in full_statuses.values())
+        total_found = sum(status.found_checks for status in full_statuses.values())
+        overall_percentage = (total_found / total_checks * 100) if total_checks > 0 else 0
+
+        # Add summary rows to table
+        for col in table.keys():
+            table[col].append("")  # Empty row separator
+        
+        table["Slot"].append("Total found:")
+        table["Total"].append("")
+        table["Found"].append(str(total_found))
+        for col in list(table.keys())[3:]:  # Fill remaining columns with empty strings
+            table[col].append("")
+        
+        table["Slot"].append("Overall completion:")
+        table["Total"].append("")
+        table["Found"].append(f"{overall_percentage:.1f}%")
+        for col in list(table.keys())[3:]:  # Fill remaining columns with empty strings
+            table[col].append("")
+
         await send_table(ctx, table, right_just=True)
 
     @staticmethod
