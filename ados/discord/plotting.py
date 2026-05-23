@@ -26,7 +26,15 @@ class TablePlotter:
             "Self Freed": [],
             "   ": [],
         }
-        for slot, status in full_statuses.items():
+
+        # Sort by percentage (highest first)
+        sorted_statuses = sorted(
+            full_statuses.items(),
+            key=lambda item: item[1].found_checks / item[1].total_checks,
+            reverse=True
+        )
+
+        for slot, status in sorted_statuses:
             slot_prefix = "+" if status.goal_completed else "-" if status.has_released else " "
             table["Slot"].append(f"{slot_prefix} {slot}")
             table["Total"].append(str(status.total_checks))
