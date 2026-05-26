@@ -191,10 +191,27 @@ class MessageBroadcaster:
             except Exception as ex:
                 _log.error("Error broadcasting message to channels %s: %s", item.channel_names, ex)
 
+
+    async def build_embed_for_item_send(self, message: ItemSendMessage):
+        PROGRESSION_COLOR = 0xff5ce4 # PINK
+        USEFUL_COLOR = 0x3642ec # BLUE
+        FILLER_COLOR = 0x11883b # GREEN
+        TRAP_COLOR = 0xd51515 # RED
+        if message.category == ItemCategory.TRAP:
+            color = TRAP_COLOR
+            embed = discord.Embed(title=f":broken_heart: {highlight(from_slot())} subjected {highlight(to_slot)} to `{item}`", color=color)
+
+        return embed
     # This is the core functionality of the broadcaster: handling an item being sent in the
     # multiworld. These are subject to a variety of filters based on channel configuration,
     # and may notify users who have subscribed to certain items.
     def _handle_item_send(self, message: ItemSendMessage) -> None:
+
+        PROGRESSION_COLOR = 0xff5ce4 # PINK
+        USEFUL_COLOR = 0x3642ec # BLUE
+        FILLER_COLOR = 0x11883b # GREEN
+        TRAP_COLOR = 0xd51515 # RED
+
         channel_names: list[str] = []
         for channel_name, config in self._channel_configs.items():
             if message.category == ItemCategory.TRAP and config.send_traps:
@@ -211,17 +228,22 @@ class MessageBroadcaster:
 
         self_send = message.to_slot_id == message.from_slot_id
         if message.category == ItemCategory.TRAP:
+            color = TRAP_COLOR
             if self_send:
-                content = f":broken_heart: {highlight(from_slot)} subjected themselves to `{item}`"
+                content = discord.Embed(title=f":broken_heart: {highlight(from_slot)} subjected themselves to", color=color)
+                content.add_field(name="", value=f"`{item}`", inline=False)
             else:
-                content = f":broken_heart: {highlight(from_slot)} subjected {highlight(to_slot)} to `{item}`"
+                content = discord.Embed(title=f":broken_heart: {highlight(from_slot)} subjected {highlight(to_slot)} to", color=color)
+                content.add_field(name="", value=f"`{item}`", inline=False)
         else:
             # pylint: disable-next = else-if-used
             if self_send:
-                content = f"{highlight(from_slot)} found their own `{item}`"
+                content = discord.Embed(title=f"{highlight(from_slot)} found their own", color=USEFUL_COLOR)
+                content.add_field(name="", value=f"`{item}`", inline=False)
             else:
-                content = f"{highlight(from_slot)} sent {highlight(to_slot)} their `{item}`"
-        content += f"{{mentions}}\n-# via check {location}"
+                content = discord.Embed(title=f"{highlight(from_slot)} sent {highlight(to_slot)} their", color=USEFUL_COLOR)
+                content.add_field(name="", value=f"`{item}`", inline=False)
+        content.set_footer(text=f"{{mentions}}-# via check {location}")
 
         _log.info("Handling item '%s' sent from '%s' to '%s'", item, from_slot, to_slot)
         mention_user_ids = self._state.get_subscribed_users(to_slot, item)
