@@ -181,27 +181,28 @@ class MessageBroadcaster:
                     user = await self._client.get_or_fetch(discord.User, user_id)
                     if user is not None:
                         mentions += f" {user.mention}"
-                content = content.format(mentions=mentions)
+                
+                # Handle both string and Embed content
+                if isinstance(content, discord.Embed):
+                    # Format the footer text if it contains {mentions}
+                    if content.footer and content.footer.text and "{mentions}" in content.footer.text:
+                        formatted_footer = content.footer.text.format(mentions=mentions)
+                        content.set_footer(text=formatted_footer)
+                else:
+                    # String content - format directly
+                    content = content.format(mentions=mentions)
 
                 for channel_name in item.channel_names:
                     channel = self._channels.get(channel_name)
                     if not channel:
                         continue
-                    await channel.send(content)
+                    if isinstance(content, discord.Embed):
+                        await channel.send(embed=content)
+                    else:
+                        await channel.send(content)
             except Exception as ex:
                 _log.error("Error broadcasting message to channels %s: %s", item.channel_names, ex)
 
-
-    async def build_embed_for_item_send(self, message: ItemSendMessage):
-        PROGRESSION_COLOR = 0xff5ce4 # PINK
-        USEFUL_COLOR = 0x3642ec # BLUE
-        FILLER_COLOR = 0x11883b # GREEN
-        TRAP_COLOR = 0xd51515 # RED
-        if message.category == ItemCategory.TRAP:
-            color = TRAP_COLOR
-            embed = discord.Embed(title=f":broken_heart: {highlight(from_slot())} subjected {highlight(to_slot)} to `{item}`", color=color)
-
-        return embed
     # This is the core functionality of the broadcaster: handling an item being sent in the
     # multiworld. These are subject to a variety of filters based on channel configuration,
     # and may notify users who have subscribed to certain items.
@@ -211,6 +212,7 @@ class MessageBroadcaster:
         USEFUL_COLOR = 0x3642ec # BLUE
         FILLER_COLOR = 0x11883b # GREEN
         TRAP_COLOR = 0xd51515 # RED
+        DEATH_LINK_COLOR = 0x1a1a1a  # DARK GRAY/BLACK
 
         channel_names: list[str] = []
         for channel_name, config in self._channel_configs.items():
@@ -230,20 +232,30 @@ class MessageBroadcaster:
         if message.category == ItemCategory.TRAP:
             color = TRAP_COLOR
             if self_send:
-                content = discord.Embed(title=f":broken_heart: {highlight(from_slot)} subjected themselves to", color=color)
+                content = discord.Embed(title=f":broken_heart: {from_slot}", color=color)
                 content.add_field(name="", value=f"`{item}`", inline=False)
             else:
-                content = discord.Embed(title=f":broken_heart: {highlight(from_slot)} subjected {highlight(to_slot)} to", color=color)
+                content = discord.Embed(title=f":broken_heart: {from_slot} ➡️ {to_slot}", color=color)
                 content.add_field(name="", value=f"`{item}`", inline=False)
+
         else:
+            if message.category == ItemCategory.FILLER:
+                embed_color = FILLER_COLOR
+            elif message.category == ItemCategory.USEFUL:
+                embed_color = USEFUL_COLOR
+            elif message.category == ItemCategory.PROGRESSION:
+                embed_color = PROGRESSION_COLOR
+            else:
+                # Default for any other category
+                embed_color = USEFUL_COLOR
             # pylint: disable-next = else-if-used
             if self_send:
-                content = discord.Embed(title=f"{highlight(from_slot)} found their own", color=USEFUL_COLOR)
+                content = discord.Embed(title=f"{from_slot} found their own", color=embed_color)
                 content.add_field(name="", value=f"`{item}`", inline=False)
             else:
-                content = discord.Embed(title=f"{highlight(from_slot)} sent {highlight(to_slot)} their", color=USEFUL_COLOR)
+                content = discord.Embed(title=f"{from_slot} ➡️ {to_slot}", color=embed_color)
                 content.add_field(name="", value=f"`{item}`", inline=False)
-        content.set_footer(text=f"{{mentions}}-# via check {location}")
+        content.set_footer(text=f"{{mentions}} via check {location}")
 
         _log.info("Handling item '%s' sent from '%s' to '%s'", item, from_slot, to_slot)
         mention_user_ids = self._state.get_subscribed_users(to_slot, item)
@@ -253,9 +265,11 @@ class MessageBroadcaster:
         if not (channel_names := self._filter_channels(lambda config: config.send_death_links)):
             return
 
-        content = highlight(message.slot_name)
-        content = random.choice(self._death_link_messages).format(player=content)
-        content = f":headstone: {content}"
+        DEATH_LINK_COLOR = 0x1a1a1a  # DARK GRAY/BLACK
+        
+        death_message = random.choice(self._death_link_messages).format(player=message.slot_name)
+        
+        content = discord.Embed(title=f":headstone: {death_message}", color=DEATH_LINK_COLOR)
 
         _log.info("Handling death link from '%s'", message.slot_name)
         self._broadcast_queue.put_nowait(BroadcastItem(channel_names, content))
